@@ -197,7 +197,9 @@ int main(void) {
         }
         EncState = EncNew;
         
-        if (EncState == 0) {
+        Displayed[3] = digits[EncCnt + 5];
+        
+        if (EncState == ENC_S0) {
             if (EncCnt > 0) Value++;
             if (EncCnt < 0) Value--;
             EncCnt = 0;
