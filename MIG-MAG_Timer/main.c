@@ -28,6 +28,11 @@
 #define KEYS_DDR DDRD
 #define ENC1 4
 #define ENC2 5
+#define ENC_MASK (1<<ENC2 | 1<<ENC1)
+#define ENC_S0 (1<<ENC2 | 1<<ENC1)
+#define ENC_S1 (1<<ENC2 | 0<<ENC1)
+#define ENC_S2 (0<<ENC2 | 0<<ENC1)
+#define ENC_S3 (0<<ENC2 | 1<<ENC1)
 
 //------------- INC -------------------------
 
@@ -47,7 +52,13 @@ const int8_t digits[] = {
     0b1011111, //6
     0b1110000, //7
     0b1111111, //8
-    0b1111011 //9
+    0b1111011, //9
+    0b1110111, //A
+    0b0011111, //B
+    0b1001110, //C
+    0b0111101, //D
+    0b1001111, //E
+    0b1000111, //F
 };
 
 #define SYM_EMPTY 0
@@ -145,8 +156,8 @@ void SendSymbol(uint8_t n, uint8_t a) {
 // ============== Main ===============
 int main(void) {
     uint8_t CurrentDigit = 0;
-    int8_t EncoderCounter = 0;
-    uint8_t EncoderLastState = 0;
+    int8_t EncCnt = 0;
+    uint8_t EncState = ENC_S0;
     int8_t Value = 0;
     
     init();
@@ -157,51 +168,45 @@ int main(void) {
     Displayed[0] = symbols[SYM_EMPTY];
     
     while (1) {
-        uint8_t EncoderCurrentState;
-		// Get current status
-		switch (KEYS_PIN & (1<<ENC1 | 1<<ENC2)) {
-			case 1<<ENC2 :
-				EncoderCurrentState = 1;
-				break;
-			case 0 :
-				EncoderCurrentState = 2;
-				break;
-			case 1<<ENC1 :
-				EncoderCurrentState = 3;
-				break;
-			default :
-				EncoderCurrentState = 0;
-		}
-		// Compare with last state
-		switch ((EncoderCurrentState - EncoderLastState) & 0b11) {
-			case 0b01:
-				EncoderCounter++;
-				EncoderLastState = EncoderCurrentState;
-				break;
-			case 0b11:
-				EncoderCounter--;
-				EncoderLastState = EncoderCurrentState;
-		}
-		// Full encoder cycle
-        Displayed[1] = digits[EncoderCounter + 4]; // Debug
-		if (EncoderCurrentState == 0) {
-			if (EncoderCounter == 4) {
-				// TODO: Increase action
-				Value++;
-			}
-			if (EncoderCounter == -4) {
-				// TODO: Decrease action
-				Value--;
-			}
-			EncoderLastState = 0;
-		}
+        uint8_t EncNew;
+        // Get current status
+        
+	    EncNew = KEYS_PIN & ENC_MASK;
+        
+        switch (EncState) {
+            case ENC_S0: {
+                if (EncNew == ENC_S1) EncCnt++;
+                if (EncNew == ENC_S3) EncCnt--;
+                break;
+            }                
+            case ENC_S1: {
+                if (EncNew == ENC_S2) EncCnt++;
+                if (EncNew == ENC_S0) EncCnt--;
+                break;
+            }                
+            case ENC_S2: {
+                if (EncNew == ENC_S3) EncCnt++;
+                if (EncNew == ENC_S1) EncCnt--;
+                break;
+            }                
+            default: {
+                if (EncNew == ENC_S0) EncCnt++;
+                if (EncNew == ENC_S2) EncCnt--;
+                break;
+            }                
+        }
+        EncState = EncNew;
+        
+        if (EncState == 0) {
+            if (EncCnt > 0) Value++;
+            if (EncCnt < 0) Value--;
+            EncCnt = 0;
+        }            
+        
+        Displayed[0] = digits[Value & 0xF];
+        Displayed[1] = digits[Value>>4  & 0xF];
 		
-		if (Value > 9) { Value = 0;}
-		if (Value < 0) { Value = 9;}
-		
-		Displayed[0] = digits[Value]; // Debug
-
-        if(ActionFlags & 1<<NEXT_DIGIT_FLAG) {
+        if (ActionFlags & 1<<NEXT_DIGIT_FLAG) {
             ActionFlags &= ~(1<<NEXT_DIGIT_FLAG);
             SendSymbol(CurrentDigit, Displayed[CurrentDigit]);
             if(CurrentDigit) {
@@ -210,6 +215,7 @@ int main(void) {
                 CurrentDigit = NUM_OF_DIGITS;
             }
         }
+        
     }
 }
 
