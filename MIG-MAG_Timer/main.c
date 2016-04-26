@@ -103,7 +103,8 @@ volatile uint8_t Displayed[NUM_OF_DIGITS];
 ISR(TIMER0_COMPA_vect) {
     static uint8_t NextDigitCnt = DIGIT_UPD_MS;
     ActionFlags |= 1<<KEYSCAN_FLAG;
-    if(--NextDigitCnt == 0) {
+	NextDigitCnt--;
+    if(NextDigitCnt == 0) {
         NextDigitCnt = DIGIT_UPD_MS;
         ActionFlags |= 1<<NEXT_DIGIT_FLAG;
     }
@@ -125,20 +126,18 @@ void init(void) {
     sei();
 }
 
+void SPIOut(uint8_t a) {
+    USIDR = a;
+    USISR |= 1<<USIOIF;
+    while (~USISR & 1<<USIOIF) {
+        USICR = 0b01<<USIWM0 | 0b10<<USICS0 | 1<<USICLK | 1<<USITC;
+    }
+}
+
 void SendSymbol(uint8_t n, uint8_t a) {
-    IND_PORT &= ~(1<<IND_CLR);
-    IND_PORT |= 1<<IND_CLR;
-    
-    USIDR = 1<<n;
-    USISR |= 1<<USIOIF;
-    while (~USISR & 1<<USIOIF) {
-        USICR = 0b01<<USIWM0 | 0b10<<USICS0 | 1<<USICLK | 1<<USITC;
-    }
-    USIDR = ~a;
-    USISR |= 1<<USIOIF;
-    while (~USISR & 1<<USIOIF) {
-        USICR = 0b01<<USIWM0 | 0b10<<USICS0 | 1<<USICLK | 1<<USITC;
-    }
+    SPIOut(1<<n);
+    SPIOut(~a);
+
     IND_PORT |= 1<<IND_ST;
     IND_PORT &= ~(1<<IND_ST);
 }
@@ -147,8 +146,8 @@ void SendSymbol(uint8_t n, uint8_t a) {
 int main(void) {
     uint8_t CurrentDigit = 0;
     int8_t EncoderCounter = 0;
-    uint8_t EncoderLastState = 0b11;
-    //uint8_t Value = 0;
+    uint8_t EncoderLastState = 0;
+    int8_t Value = 0;
     
     init();
     
@@ -158,35 +157,49 @@ int main(void) {
     Displayed[0] = symbols[SYM_EMPTY];
     
     while (1) {
-        uint8_t EncoderCurrentState = 0;
-        if (KEYS_PIN & 1<<ENC1) { EncoderCurrentState |= 0b01; }
-        if (KEYS_PIN & 1<<ENC2) { EncoderCurrentState |= 0b10; }
-        
-        if ( (EncoderLastState == 0b11 && EncoderCurrentState == 0b10) ||
-             (EncoderLastState == 0b10 && EncoderCurrentState == 0b00) ||
-             (EncoderLastState == 0b00 && EncoderCurrentState == 0b01) ||
-             (EncoderLastState == 0b01 && EncoderCurrentState == 0b11) ) {
-            EncoderCounter++;
-        }
-        if ( (EncoderLastState == 0b11 && EncoderCurrentState == 0b01) ||
-             (EncoderLastState == 0b01 && EncoderCurrentState == 0b00) ||
-             (EncoderLastState == 0b00 && EncoderCurrentState == 0b10) ||
-             (EncoderLastState == 0b10 && EncoderCurrentState == 0b11) ) {
-            EncoderCounter--;
-        }
-        
-        
-        EncoderLastState = EncoderCurrentState;
-        Displayed[1] = digits[EncoderCounter + 4];
-        if (EncoderCurrentState == 0b11) {
-            if (EncoderCounter == 4) {
-                //increase action
-            }
-            if (EncoderCounter == -4) {
-                //decrease action
-            }
-            EncoderCounter = 0;
-        }
+        uint8_t EncoderCurrentState;
+		// Get current status
+		switch (KEYS_PIN & (1<<ENC1 | 1<<ENC2)) {
+			case 1<<ENC2 :
+				EncoderCurrentState = 1;
+				break;
+			case 0 :
+				EncoderCurrentState = 2;
+				break;
+			case 1<<ENC1 :
+				EncoderCurrentState = 3;
+				break;
+			default :
+				EncoderCurrentState = 0;
+		}
+		// Compare with last state
+		switch ((EncoderCurrentState - EncoderLastState) & 0b11) {
+			case 0b01:
+				EncoderCounter++;
+				EncoderLastState = EncoderCurrentState;
+				break;
+			case 0b11:
+				EncoderCounter--;
+				EncoderLastState = EncoderCurrentState;
+		}
+		// Full encoder cycle
+        Displayed[1] = digits[EncoderCounter + 4]; // Debug
+		if (EncoderCurrentState == 0) {
+			if (EncoderCounter == 4) {
+				// TODO: Increase action
+				Value++;
+			}
+			if (EncoderCounter == -4) {
+				// TODO: Decrease action
+				Value--;
+			}
+			EncoderLastState = 0;
+		}
+		
+		if (Value > 9) { Value = 0;}
+		if (Value < 0) { Value = 9;}
+		
+		Displayed[0] = digits[Value]; // Debug
 
         if(ActionFlags & 1<<NEXT_DIGIT_FLAG) {
             ActionFlags &= ~(1<<NEXT_DIGIT_FLAG);
