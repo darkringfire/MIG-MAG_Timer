@@ -23,6 +23,10 @@
 #define LED1 1
 #define LED2 0
 
+#define KEY_CLICK_F 0
+#define KEY_PRESS_F 1
+#define ENC_INC_F 2
+#define ENC_DEC_F 3
 #define KEYS_PORT PORTD
 #define KEYS_PIN PIND
 #define KEYS_DDR DDRD
@@ -101,7 +105,6 @@ const int8_t symbols[] = {
     0b0001110, //L
 };
 
-#define DIGIT_UPD_MS 3
 #define  NUM_OF_DIGITS 4
 
 #define NEXT_DIGIT_FLAG 0
@@ -113,13 +116,8 @@ volatile uint8_t Displayed[NUM_OF_DIGITS];
 // ============== Interrupts =============
 
 ISR(TIMER0_COMPA_vect) {
-    static uint8_t NextDigitCnt = DIGIT_UPD_MS;
     ActionFlags |= 1<<KEYSCAN_FLAG;
-	NextDigitCnt--;
-    if(NextDigitCnt == 0) {
-        NextDigitCnt = DIGIT_UPD_MS;
-        ActionFlags |= 1<<NEXT_DIGIT_FLAG;
-    }
+    ActionFlags |= 1<<NEXT_DIGIT_FLAG;
 }
 
 // ============== Init ===============
@@ -154,82 +152,107 @@ void SendSymbol(uint8_t n, uint8_t a) {
     IND_PORT &= ~(1<<IND_ST);
 }
 
+uint8_t ReadKeyState() {
+    static uint16_t KeyTime = 0;
+    static uint8_t EncState = ENC_S0;
+    static int8_t EncCnt = 0;
+    uint8_t KeyFlags = 0;
+    
+	// get key status
+	if (KEYS_PIN & 1<<KEY) {
+    	if (KeyTime > 10 && KeyTime < 1000) {
+        	// Click
+        	KeyFlags |= 1<<KEY_CLICK_F;
+    	}
+    	KeyTime = 0;
+    	} else {
+    	if (KeyTime == 1000) {
+        	// Press
+        	KeyFlags |= 1<<KEY_PRESS_F;
+    	}
+    	if (KeyTime < 1000+1) {
+        	KeyTime++;
+    	}
+	}
+			
+	uint8_t EncNew;
+	// Get new Encoder status
+			
+	EncNew = KEYS_PIN & ENC_MASK;
+			
+	switch (EncState) {
+    	case ENC_S0: {
+        	if (EncNew == ENC_S1) EncCnt++;
+        	if (EncNew == ENC_S3) EncCnt--;
+        	break;
+    	}
+    	case ENC_S1: {
+        	if (EncNew == ENC_S2) EncCnt++;
+        	if (EncNew == ENC_S0) EncCnt--;
+        	break;
+    	}
+    	case ENC_S2: {
+        	if (EncNew == ENC_S3) EncCnt++;
+        	if (EncNew == ENC_S1) EncCnt--;
+        	break;
+    	}
+    	default: {
+        	if (EncNew == ENC_S0) EncCnt++;
+        	if (EncNew == ENC_S2) EncCnt--;
+        	break;
+    	}
+	}
+	EncState = EncNew;
+			
+	if (EncState == ENC_S0) {
+    	if (EncCnt > 0) KeyFlags |= 1<<ENC_INC_F;
+    	if (EncCnt < 0) KeyFlags |= 1<<ENC_DEC_F;
+    	EncCnt = 0;
+	}
+    return KeyFlags;
+}
+
 // ============== Main ===============
 int main(void) {
     init();
-    
+    uint8_t KeyFlags;
     uint8_t CurrentDigit = 0;
-    int8_t EncCnt = 0;
-    uint8_t EncState = ENC_S0;
-    int8_t Value = 0;
-	uint16_t KeyTime = 0;
     
-    Displayed[3] = symbols[SYM_EMPTY];
-    Displayed[2] = symbols[SYM_EMPTY];
-    Displayed[1] = symbols[SYM_EMPTY];
-    Displayed[0] = symbols[SYM_EMPTY];
+    // DEBUG
+    int8_t Value = 0;
+    int8_t ClickCnt = 0;
+    int8_t PressCnt = 0;
+    
+    Displayed[3] = Displayed[2] = Displayed[1] = Displayed[0] = symbols[SYM_EMPTY];
     
     while (1) {
 		if (ActionFlags & 1<<KEYSCAN_FLAG) {
 			ActionFlags &= ~(1<<KEYSCAN_FLAG);
 			
-			// get key status
-			if (KEYS_PIN & 1<<KEY) {
-				if (KeyTime > 10 && KeyTime < 1000) {
-					// Click
-					_NOP();
-				}
-				KeyTime = 0;
-			} else {
-				if (KeyTime == 1000) {
-					// Press
-					_NOP();
-				}
-				if (KeyTime < 1000+1) {
-					KeyTime++;
-				}
-			}
-			
-			uint8_t EncNew;
-			// Get new Encoder status
-        
-			EncNew = KEYS_PIN & ENC_MASK;
-        
-			switch (EncState) {
-				case ENC_S0: {
-					if (EncNew == ENC_S1) EncCnt++;
-					if (EncNew == ENC_S3) EncCnt--;
-					break;
-				}
-				case ENC_S1: {
-					if (EncNew == ENC_S2) EncCnt++;
-					if (EncNew == ENC_S0) EncCnt--;
-					break;
-				}
-				case ENC_S2: {
-					if (EncNew == ENC_S3) EncCnt++;
-					if (EncNew == ENC_S1) EncCnt--;
-					break;
-				}
-				default: {
-					if (EncNew == ENC_S0) EncCnt++;
-					if (EncNew == ENC_S2) EncCnt--;
-					break;
-				}
-			}
-			EncState = EncNew;
-        
-			Displayed[3] = digits[EncCnt + 5];
-        
-			if (EncState == ENC_S0) {
-				if (EncCnt > 0) Value++;
-				if (EncCnt < 0) Value--;
-				EncCnt = 0;
-			}
+            KeyFlags = ReadKeyState();
+            
+			if (KeyFlags & 1<<ENC_INC_F) {
+                // DEBUG
+                Value++;
+            }                
+			if (KeyFlags & 1<<ENC_DEC_F) {
+                // DEBUG
+                Value--;
+            }
+            if (KeyFlags & 1<<KEY_CLICK_F) {
+                // DEBUG
+                ClickCnt = (ClickCnt + 1) & 0xF;
+            }
+            if (KeyFlags & 1<<KEY_PRESS_F) {
+                // DEBUG
+                PressCnt = (PressCnt + 1) & 0xF;
+            }
 		}
         
         Displayed[0] = digits[Value & 0xF];
         Displayed[1] = digits[Value>>4  & 0xF];
+        Displayed[2] = digits[ClickCnt];
+        Displayed[3] = digits[PressCnt];
 		
         if (ActionFlags & 1<<NEXT_DIGIT_FLAG) {
             ActionFlags &= ~(1<<NEXT_DIGIT_FLAG);
