@@ -26,6 +26,7 @@
 #define KEYS_PORT PORTD
 #define KEYS_PIN PIND
 #define KEYS_DDR DDRD
+#define KEY 3
 #define ENC1 4
 #define ENC2 5
 #define ENC_MASK (1<<ENC2 | 1<<ENC1)
@@ -123,7 +124,7 @@ ISR(TIMER0_COMPA_vect) {
 
 // ============== Init ===============
 void init(void) {
-    KEYS_PORT |= 1<<ENC1 | 1<<ENC2;
+    KEYS_PORT |= 1<<ENC1 | 1<<ENC2 | 1<<KEY;
     
     IND_PORT = 1<<IND_DI;
     IND_DDR  = 1<<IND_SCK | 1<<IND_DO | 1<<IND_ST | 1<<IND_CLR | 1<<IND_STROBE | 1<<LED1 | 1<<LED2;
@@ -155,12 +156,13 @@ void SendSymbol(uint8_t n, uint8_t a) {
 
 // ============== Main ===============
 int main(void) {
+    init();
+    
     uint8_t CurrentDigit = 0;
     int8_t EncCnt = 0;
     uint8_t EncState = ENC_S0;
     int8_t Value = 0;
-    
-    init();
+	uint16_t KeyTime = 0;
     
     Displayed[3] = symbols[SYM_EMPTY];
     Displayed[2] = symbols[SYM_EMPTY];
@@ -168,42 +170,63 @@ int main(void) {
     Displayed[0] = symbols[SYM_EMPTY];
     
     while (1) {
-        uint8_t EncNew;
-        // Get current status
+		if (ActionFlags & 1<<KEYSCAN_FLAG) {
+			ActionFlags &= ~(1<<KEYSCAN_FLAG);
+			
+			// get key status
+			if (KEYS_PIN & 1<<KEY) {
+				if (KeyTime > 10 && KeyTime < 1000) {
+					// Click
+					_NOP();
+				}
+				KeyTime = 0;
+			} else {
+				if (KeyTime == 1000) {
+					// Press
+					_NOP();
+				}
+				if (KeyTime < 1000+1) {
+					KeyTime++;
+				}
+			}
+			
+			uint8_t EncNew;
+			// Get new Encoder status
         
-	    EncNew = KEYS_PIN & ENC_MASK;
+			EncNew = KEYS_PIN & ENC_MASK;
         
-        switch (EncState) {
-            case ENC_S0: {
-                if (EncNew == ENC_S1) EncCnt++;
-                if (EncNew == ENC_S3) EncCnt--;
-                break;
-            }                
-            case ENC_S1: {
-                if (EncNew == ENC_S2) EncCnt++;
-                if (EncNew == ENC_S0) EncCnt--;
-                break;
-            }                
-            case ENC_S2: {
-                if (EncNew == ENC_S3) EncCnt++;
-                if (EncNew == ENC_S1) EncCnt--;
-                break;
-            }                
-            default: {
-                if (EncNew == ENC_S0) EncCnt++;
-                if (EncNew == ENC_S2) EncCnt--;
-                break;
-            }                
-        }
-        EncState = EncNew;
+			switch (EncState) {
+				case ENC_S0: {
+					if (EncNew == ENC_S1) EncCnt++;
+					if (EncNew == ENC_S3) EncCnt--;
+					break;
+				}
+				case ENC_S1: {
+					if (EncNew == ENC_S2) EncCnt++;
+					if (EncNew == ENC_S0) EncCnt--;
+					break;
+				}
+				case ENC_S2: {
+					if (EncNew == ENC_S3) EncCnt++;
+					if (EncNew == ENC_S1) EncCnt--;
+					break;
+				}
+				default: {
+					if (EncNew == ENC_S0) EncCnt++;
+					if (EncNew == ENC_S2) EncCnt--;
+					break;
+				}
+			}
+			EncState = EncNew;
         
-        Displayed[3] = digits[EncCnt + 5];
+			Displayed[3] = digits[EncCnt + 5];
         
-        if (EncState == ENC_S0) {
-            if (EncCnt > 0) Value++;
-            if (EncCnt < 0) Value--;
-            EncCnt = 0;
-        }            
+			if (EncState == ENC_S0) {
+				if (EncCnt > 0) Value++;
+				if (EncCnt < 0) Value--;
+				EncCnt = 0;
+			}
+		}
         
         Displayed[0] = digits[Value & 0xF];
         Displayed[1] = digits[Value>>4  & 0xF];
