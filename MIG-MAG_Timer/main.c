@@ -12,32 +12,34 @@
 #define HI(x) ((x)>>8)
 #define LO(x) ((x)& 0xFF)
 
-#define IND_PORT PORTB
-#define IND_DDR DDRB
-#define IND_SCK 7
-#define IND_DO 6
-#define IND_DI 5
-#define IND_ST 4
-#define IND_CLR 3
-#define IND_STROBE 2
-#define LED1 1
-#define LED2 0
+#define IND_PORT	PORTB
+#define IND_DDR		DDRB
+#define IND_SCK		7
+#define IND_DO		6
+#define IND_DI		5
+#define IND_ST		4
+
+#define OUT_PORT	PORTA
+#define OUT_DDR		DDRA
+#define WIRE		0
+#define GAS			1
 
 #define KEY_CLICK_F 0
 #define KEY_PRESS_F 1
-#define ENC_INC_F 2
-#define ENC_DEC_F 3
-#define KEYS_PORT PORTD
-#define KEYS_PIN PIND
-#define KEYS_DDR DDRD
-#define KEY 3
-#define ENC1 4
-#define ENC2 5
-#define ENC_MASK (1<<ENC2 | 1<<ENC1)
-#define ENC_S0 (1<<ENC2 | 1<<ENC1)
-#define ENC_S1 (1<<ENC2 | 0<<ENC1)
-#define ENC_S2 (0<<ENC2 | 0<<ENC1)
-#define ENC_S3 (0<<ENC2 | 1<<ENC1)
+#define ENC_INC_F	2
+#define ENC_DEC_F	3
+#define KEYS_PORT	PORTD
+#define KEYS_PIN	PIND
+#define KEYS_DDR	DDRD
+#define BUTTON		2
+#define KEY			3
+#define ENC1		4
+#define ENC2		5
+#define ENC_MASK	(1<<ENC2 | 1<<ENC1)
+#define ENC_S0		(1<<ENC2 | 1<<ENC1)
+#define ENC_S1		(1<<ENC2 | 0<<ENC1)
+#define ENC_S2		(0<<ENC2 | 0<<ENC1)
+#define ENC_S3		(0<<ENC2 | 1<<ENC1)
 
 //------------- INC -------------------------
 
@@ -67,22 +69,23 @@ const int8_t digits[] = {
 };
 
 #define SYM_EMPTY 0
-#define SYM_G 1
-#define SYM_A 2
-#define SYM_S 3
-#define SYM_P 4
-#define SYM_R 5
-#define SYM_O 6
-#define SYM_F1 7
-#define SYM_F2 8
-#define SYM_F3 9
-#define SYM_R1 10
-#define SYM_R2 11
-#define SYM_R3 12
-#define SYM_R4 13
-#define SYM_H 14
-#define SYM_E 15
-#define SYM_L 16
+#define SYM_G	1
+#define SYM_A	2
+#define SYM_S	3
+#define SYM_P	4
+#define SYM_R	5
+#define SYM_O	6
+#define SYM_V	7
+#define SYM_F1	8
+#define SYM_F2	9
+#define SYM_F3	10
+#define SYM_R1	11
+#define SYM_R2	12
+#define SYM_R3	13
+#define SYM_R4	14
+#define SYM_H	15
+#define SYM_E	16
+#define SYM_L	17
 
 
 const int8_t symbols[] = {
@@ -93,6 +96,7 @@ const int8_t symbols[] = {
     0b1110110, //P
     0b1100111, //R
     0b1111110, //O
+    0b1111111, //V
     0b1000000, //F1
     0b0000001, //F2
     0b0001000, //F3
@@ -113,6 +117,10 @@ const int8_t symbols[] = {
 volatile uint8_t ActionFlags = 0;
 volatile uint8_t Displayed[NUM_OF_DIGITS];
 
+// DEBUG
+int8_t Value1 = 0;
+int8_t Value2 = 0;
+
 // ============== Interrupts =============
 
 ISR(TIMER0_COMPA_vect) {
@@ -122,11 +130,13 @@ ISR(TIMER0_COMPA_vect) {
 
 // ============== Init ===============
 void init(void) {
-    KEYS_PORT |= 1<<ENC1 | 1<<ENC2 | 1<<KEY;
+    KEYS_PORT |= 1<<ENC1 | 1<<ENC2 | 1<<KEY | 1<<BUTTON; // Pull-Up Resistors
+	
+	OUT_PORT |= 1<<WIRE | 1<<GAS; // Out
+	OUT_DDR |= 1<<WIRE | 1<<GAS; // Direction  - Out
     
-    IND_PORT = 1<<IND_DI;
-    IND_DDR  = 1<<IND_SCK | 1<<IND_DO | 1<<IND_ST | 1<<IND_CLR | 1<<IND_STROBE | 1<<LED1 | 1<<LED2;
-    IND_PORT |= 1<<IND_CLR;
+    IND_PORT = 1<<IND_DI; // Pull-Up
+    IND_DDR  = 1<<IND_SCK | 1<<IND_DO | 1<<IND_ST; // Direction  - Out
     
     TCCR0A = 0b10 << WGM00;
     TCCR0B = 0 << WGM02 | 0b010 << CS00; // 001 - 1; 010 - 8; 011 - 64; 100 - 256; 101 - 1024
@@ -212,18 +222,139 @@ uint8_t ReadKeyState() {
     return KeyFlags;
 }
 
+void ModeProcessing(uint8_t KeyFlags) {
+	#define MODE_NOCHANGE		0
+	#define MODE_WORK			1
+	#define MODE_SET1			2
+	#define MODE_SET2			3
+	#define MODE_BYPASS_WIRE	4
+	#define MODE_BYPASS_GAS		5
+	
+	#define STATE_IDLE			0
+	
+	#define STATE_WORK_PRE_GAS	1
+	#define STATE_WORK_WELD		2
+	#define STATE_WORK_POST_GAS	3
+	
+	static uint8_t CurrentMode = MODE_WORK;
+	static uint8_t State = STATE_IDLE;
+	uint8_t NewMode = MODE_NOCHANGE;
+
+	// Define Action and NewMode
+	switch (CurrentMode) {
+		case MODE_WORK: {
+			// TODO: Show Delay1 & Delay2
+			Displayed[3] = digits[Value1>>4  & 0xF];
+			Displayed[2] = digits[Value1 & 0xF];
+			Displayed[1] = digits[Value2>>4  & 0xF];
+			Displayed[0] = digits[Value2 & 0xF];
+
+			if (KeyFlags & 1<<KEY_CLICK_F) NewMode = MODE_SET1;
+			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_BYPASS_WIRE;
+			break;
+		}
+		case MODE_SET1: {
+			// TODO: Blink Delay1
+			Displayed[3] = digits[Value1>>4  & 0xF];
+			Displayed[2] = digits[Value1 & 0xF];
+			Displayed[1] = Displayed[0] = symbols[SYM_EMPTY];
+					
+			if (KeyFlags & 1<<ENC_INC_F) {
+				// TODO: Increase Delay1
+				Value1++;
+			}
+			if (KeyFlags & 1<<ENC_DEC_F) {
+				// TODO: Decrease Delay1
+				Value1--;
+			}
+			if (KeyFlags & 1<<KEY_CLICK_F) NewMode = MODE_SET2;
+			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_BYPASS_WIRE;
+			break;
+		}
+		case MODE_SET2: {
+			// TODO: Blink Delay2
+			Displayed[3] = Displayed[2] = symbols[SYM_EMPTY];
+			Displayed[1] = digits[Value2>>4  & 0xF];
+			Displayed[0] = digits[Value2 & 0xF];
+					
+			if (KeyFlags & 1<<ENC_INC_F) {
+				// TODO: Increase Delay2
+				Value2++;
+			}
+			if (KeyFlags & 1<<ENC_DEC_F) {
+				// TODO: Decrease Delay2
+				Value2--;
+			}
+			if (KeyFlags & 1<<KEY_CLICK_F) {
+				NewMode = MODE_WORK;
+				// TODO: Save Delay1 & Delay2 to EEPROM
+			}
+			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_BYPASS_WIRE;
+			break;
+		}
+		case MODE_BYPASS_WIRE: {
+			// TODO: Show "WIRE"
+			Displayed[3] = symbols[SYM_P];
+			Displayed[2] = symbols[SYM_R];
+			Displayed[1] = symbols[SYM_O];
+			Displayed[0] = symbols[SYM_V];
+					
+			if (KeyFlags & 1<<KEY_CLICK_F) NewMode = MODE_BYPASS_GAS;
+			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_WORK;
+			break;
+		}
+		case MODE_BYPASS_GAS: {
+			// TODO: Show "GAS"
+			Displayed[3] = symbols[SYM_G];
+			Displayed[2] = symbols[SYM_A];
+			Displayed[1] = symbols[SYM_S];
+			Displayed[0] = symbols[SYM_EMPTY];
+					
+			if (KeyFlags & 1<<KEY_CLICK_F) NewMode = MODE_BYPASS_WIRE;
+			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_WORK;
+			break;
+		}
+	}
+			
+			
+	// Switch mode
+	if (NewMode != MODE_NOCHANGE) {
+		CurrentMode = NewMode;
+		State = STATE_IDLE;
+	}
+	switch (NewMode) {
+		case MODE_WORK: {
+			break;
+		}
+		case MODE_SET1: {
+			break;
+		}
+		case MODE_SET2: {
+			break;
+		}
+		case MODE_BYPASS_WIRE: {
+			break;
+		}
+		case MODE_BYPASS_GAS: {
+			break;
+		}
+	}
+}
+
 // ============== Main ===============
 int main(void) {
     init();
     uint8_t KeyFlags;
     uint8_t CurrentDigit = 0;
+	
     
     // DEBUG
-    int8_t Value = 0;
-    int8_t ClickCnt = 0;
-    int8_t PressCnt = 0;
+    //int8_t ClickCnt = 0;
+    //int8_t PressCnt = 0;
     
-    Displayed[3] = Displayed[2] = Displayed[1] = Displayed[0] = symbols[SYM_EMPTY];
+	// TODO: Read Delay1 & Delay2 from EEPROM
+	
+    //Displayed[3] = Displayed[2] = Displayed[1] = Displayed[0] = symbols[SYM_EMPTY];
     
     while (1) {
 		if (ActionFlags & 1<<KEYSCAN_FLAG) {
@@ -231,28 +362,10 @@ int main(void) {
 			
             KeyFlags = ReadKeyState();
             
-			if (KeyFlags & 1<<ENC_INC_F) {
-                // DEBUG
-                Value++;
-            }                
-			if (KeyFlags & 1<<ENC_DEC_F) {
-                // DEBUG
-                Value--;
-            }
-            if (KeyFlags & 1<<KEY_CLICK_F) {
-                // DEBUG
-                ClickCnt = (ClickCnt + 1) & 0xF;
-            }
-            if (KeyFlags & 1<<KEY_PRESS_F) {
-                // DEBUG
-                PressCnt = (PressCnt + 1) & 0xF;
-            }
+			ModeProcessing(KeyFlags);
 		}
+			
         
-        Displayed[0] = digits[Value & 0xF];
-        Displayed[1] = digits[Value>>4  & 0xF];
-        Displayed[2] = digits[ClickCnt];
-        Displayed[3] = digits[PressCnt];
 		
         if (ActionFlags & 1<<NEXT_DIGIT_FLAG) {
             ActionFlags &= ~(1<<NEXT_DIGIT_FLAG);
