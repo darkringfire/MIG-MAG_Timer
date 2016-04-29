@@ -5,9 +5,14 @@
  * Author : dark
  */ 
 
-//------------- DEF -------------------------
+#define F_CPU 16000000UL
+//------------- INC -------------------------
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#include <avr/eeprom.h>
 
-#define F_CPU 8000000UL
+//------------- DEF -------------------------
 #define _NOP() do { __asm__ __volatile__ ("nop"); } while (0)
 #define HI(x) ((x)>>8)
 #define LO(x) ((x)& 0xFF)
@@ -20,30 +25,52 @@
 
 #define C100MS_INIT 100
 
-#define IND_PORT	PORTB
-#define IND_DDR		DDRB
-#define IND_SCK		7
-#define IND_DO		6
-#define IND_DI		5
-#define IND_ST		4
+#ifdef _AVR_IOTN2313_H_
+    #define IND_PORT	PORTB
+    #define IND_DDR		DDRB
+    #define IND_SCK		7
+    #define IND_MOSI	6
+    #define IND_STORE	4
 
-#define OUT_PORT	PORTA
-#define OUT_DDR		DDRA
-#define WIRE		0
-#define GAS			1
+    #define OUT_PORT	PORTA
+    #define OUT_DDR		DDRA
+    #define WIRE		0
+    #define GAS			1
+
+    #define KEYS_PORT	PORTD
+    #define KEYS_PIN	PIND
+    #define KEYS_DDR	DDRD
+    #define BUTTON		2
+    #define KEY			3
+    #define ENC1		4
+    #define ENC2		5
+#endif // _AVR_IOTN2313_H_
+#ifdef _AVR_IOM328P_H_
+    #define IND_PORT    PORTB
+    #define IND_DDR     DDRB
+    #define IND_SCK     5
+    #define IND_MOSI    3
+    #define IND_STORE   2
+
+    #define OUT_PORT	PORTD
+    #define OUT_DDR		DDRD
+    #define WIRE		6
+    #define GAS			7
+
+    #define KEYS_PORT	PORTD
+    #define KEYS_PIN	PIND
+    #define KEYS_DDR	DDRD
+    #define BUTTON		5
+    #define KEY			4
+    #define ENC1		2
+    #define ENC2		3
+#endif // _AVR_IOM328P_H_
 
 #define KEY_CLICK_F 0
 #define KEY_PRESS_F 1
 #define ENC_INC_F	2
 #define ENC_DEC_F	3
 #define BUTTON_F    4
-#define KEYS_PORT	PORTD
-#define KEYS_PIN	PIND
-#define KEYS_DDR	DDRD
-#define BUTTON		2
-#define KEY			3
-#define ENC1		4
-#define ENC2		5
 #define ENC_MASK	(1<<ENC2 | 1<<ENC1)
 #define ENC_S0		(1<<ENC2 | 1<<ENC1)
 #define ENC_S1		(1<<ENC2 | 0<<ENC1)
@@ -64,13 +91,6 @@
 #define STATE_WORK_POST_GAS	3
 #define STATE_BYPASS_WIRE   4
 #define STATE_BYPASS_GAS    5
-
-//------------- INC -------------------------
-
-#include <avr/io.h>
-#include <util/delay.h>
-#include <avr/interrupt.h>
-#include <avr/eeprom.h>
 
 // ============ Global ===============
 
@@ -137,18 +157,40 @@ ISR(TIMER0_COMPA_vect) {
 
 // ============== Init ===============
 void init(void) {
+    // Ports setup
     KEYS_PORT |= 1<<ENC1 | 1<<ENC2 | 1<<KEY | 1<<BUTTON; // Pull-Up Resistors
-	
 	//OUT_PORT |= 1<<WIRE | 1<<GAS; // Out
 	OUT_DDR |= 1<<WIRE | 1<<GAS; // Direction  - Out
     
-    IND_PORT = 1<<IND_DI; // Pull-Up
-    IND_DDR  = 1<<IND_SCK | 1<<IND_DO | 1<<IND_ST; // Direction  - Out
+    // SPI setup
+    IND_DDR  |= 1<<IND_SCK | 1<<IND_MOSI | 1<<IND_STORE; // Direction  - Out
+    #ifdef _AVR_IOM328P_H_
+        // TODO: mega SPI setup
+        /* Enable SPI, Master, set clock rate fck/4 */
+        SPCR = 1<<SPE | 1<<MSTR | 0b00<<SPR0;
+    #endif // _AVR_IOM328P_H_
     
+    // Timer setup
     TCCR0A = 0b10 << WGM00;
-    TCCR0B = 0 << WGM02 | 0b011 << CS00; // 001 - 1; 010 - 8; 011 - 64; 100 - 256; 101 - 1024
-    OCR0A = 124;
-    TIMSK = 1 << OCIE0A;
+    TCCR0B = 0 << WGM02;
+    #if F_CPU == 1000000UL
+        TCCR0B |= 0b010 << CS00; // 001 - 1; 010 - 8; 011 - 64; 100 - 256; 101 - 1024
+        OCR0A = 124;
+    #endif
+    #if F_CPU == 8000000UL
+        TCCR0B |= 0b011 << CS00; // 001 - 1; 010 - 8; 011 - 64; 100 - 256; 101 - 1024
+        OCR0A = 124;
+    #endif
+    #if F_CPU == 16000000UL
+        TCCR0B |= 0b011 << CS00; // 001 - 1; 010 - 8; 011 - 64; 100 - 256; 101 - 1024
+        OCR0A = 249;
+    #endif
+    #ifdef _AVR_IOTN2313_H_
+        TIMSK = 1<<OCIE0A;
+    #endif // _AVR_IOTN2313_H_
+    #ifdef _AVR_IOM328P_H_
+        TIMSK0 = 1<<OCIE0A;
+    #endif // _AVR_IOM328P_H_
     
 	Delay1 = eeprom_read_byte(&eeDelay1);
 	Delay2 = eeprom_read_byte(&eeDelay2);
@@ -156,20 +198,28 @@ void init(void) {
     sei();
 }
 
-void SPIOut(uint8_t a) {
-    USIDR = a;
-    USISR |= 1<<USIOIF;
-    while (~USISR & 1<<USIOIF) {
-        USICR = 0b01<<USIWM0 | 0b10<<USICS0 | 1<<USICLK | 1<<USITC;
-    }
+void SPIOut(uint8_t cData) {
+    #ifdef _AVR_IOTN2313_H_
+        USIDR = cData;
+        USISR |= 1<<USIOIF;
+        while (~USISR & 1<<USIOIF) {
+            USICR = 0b01<<USIWM0 | 0b10<<USICS0 | 1<<USICLK | 1<<USITC;
+        }
+    #endif // _AVR_IOTN2313_H_
+    #ifdef _AVR_IOM328P_H_
+        /* Start transmission */
+        SPDR = cData;
+        /* Wait for transmission complete */
+        while(~SPSR & 1<<SPIF);
+    #endif // _AVR_IOM328P_H_
 }
 
 void SendSymbol(uint8_t n, uint8_t a) {
     SPIOut(1<<n);
     SPIOut(~a);
 
-    IND_PORT |= 1<<IND_ST;
-    IND_PORT &= ~(1<<IND_ST);
+    IND_PORT |= 1<<IND_STORE;
+    IND_PORT &= ~(1<<IND_STORE);
 }
 
 uint8_t ReadKeyState() {
