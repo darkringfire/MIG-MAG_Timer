@@ -11,11 +11,20 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/eeprom.h>
+#include <avr/wdt.h>
 
 //------------- DEF -------------------------
 #define _NOP() do { __asm__ __volatile__ ("nop"); } while (0)
 #define HI(x) ((x)>>8)
 #define LO(x) ((x)& 0xFF)
+#define soft_reset()        \
+do                          \
+{                           \
+    wdt_enable(WDTO_15MS);  \
+    for(;;)                 \
+    {                       \
+    }                       \
+} while(0)
 
 #define  NUM_OF_DIGITS 4
 
@@ -32,18 +41,18 @@
     #define IND_MOSI	6
     #define IND_STORE	4
 
-    #define OUT_PORT	PORTA
-    #define OUT_DDR		DDRA
-    #define WIRE		0
-    #define GAS			1
+    #define OUT_PORT    PORTA
+    #define OUT_DDR     DDRA
+    #define WIRE        0
+    #define GAS         1
 
-    #define KEYS_PORT	PORTD
-    #define KEYS_PIN	PIND
-    #define KEYS_DDR	DDRD
-    #define BUTTON		2
-    #define KEY			3
-    #define ENC1		4
-    #define ENC2		5
+    #define KEYS_PORT   PORTD
+    #define KEYS_PIN    PIND
+    #define KEYS_DDR    DDRD
+    #define BUTTON      2
+    #define KEY         3
+    #define ENC_CCW     4
+    #define ENC_CW      5
 #endif // _AVR_IOTN2313_H_
 #ifdef _AVR_IOM328P_H_
     #define IND_PORT    PORTB
@@ -52,30 +61,31 @@
     #define IND_MOSI    3
     #define IND_STORE   2
 
-    #define OUT_PORT	PORTD
-    #define OUT_DDR		DDRD
-    #define WIRE		6
-    #define GAS			7
+    #define OUT_PORT    PORTB
+    #define OUT_DDR     DDRB
+    #define WIRE        1
+    #define GAS         0
 
     #define KEYS_PORT	PORTD
     #define KEYS_PIN	PIND
     #define KEYS_DDR	DDRD
-    #define BUTTON		5
-    #define KEY			4
-    #define ENC1		2
-    #define ENC2		3
+    #define ENC_CCW		4
+    #define ENC_CW		5
+    #define BUTTON		6
+    #define KEY			7
 #endif // _AVR_IOM328P_H_
 
-#define KEY_CLICK_F 0
-#define KEY_PRESS_F 1
-#define ENC_INC_F	2
-#define ENC_DEC_F	3
-#define BUTTON_F    4
-#define ENC_MASK	(1<<ENC2 | 1<<ENC1)
-#define ENC_S0		(1<<ENC2 | 1<<ENC1)
-#define ENC_S1		(1<<ENC2 | 0<<ENC1)
-#define ENC_S2		(0<<ENC2 | 0<<ENC1)
-#define ENC_S3		(0<<ENC2 | 1<<ENC1)
+#define KEY_CLICK_F     0
+#define KEY_PRESS_F     1
+#define KEY_LONGPRESS_F 2
+#define ENC_INC_F       3
+#define ENC_DEC_F       4
+#define BUTTON_F        5
+#define ENC_MASK    (1<<ENC_CW | 1<<ENC_CCW)
+#define ENC_S0      (1<<ENC_CW | 1<<ENC_CCW)
+#define ENC_S1      (1<<ENC_CW | 0<<ENC_CCW)
+#define ENC_S2      (0<<ENC_CW | 0<<ENC_CCW)
+#define ENC_S3      (0<<ENC_CW | 1<<ENC_CCW)
 
 #define MODE_NOCHANGE		0
 #define MODE_WORK			1
@@ -158,7 +168,7 @@ ISR(TIMER0_COMPA_vect) {
 // ============== Init ===============
 void init(void) {
     // Ports setup
-    KEYS_PORT |= 1<<ENC1 | 1<<ENC2 | 1<<KEY | 1<<BUTTON; // Pull-Up Resistors
+    KEYS_PORT |= 1<<ENC_CCW | 1<<ENC_CW | 1<<KEY | 1<<BUTTON; // Pull-Up Resistors
 	//OUT_PORT |= 1<<WIRE | 1<<GAS; // Out
 	OUT_DDR |= 1<<WIRE | 1<<GAS; // Direction  - Out
     
@@ -234,7 +244,11 @@ uint8_t ReadKeyState() {
         	// Press
         	KeyFlags |= 1<<KEY_PRESS_F;
     	}
-    	if (KeyTime < 1000+1) {
+    	if (KeyTime == 5000) {
+        	// Press
+        	KeyFlags |= 1<<KEY_LONGPRESS_F;
+    	}
+    	if (KeyTime < 5000+1) {
         	KeyTime++;
     	}
     } else {
@@ -476,12 +490,17 @@ int main(void) {
     init();
     uint8_t KeyFlags;
     uint8_t CurrentDigit = 0;
+    
+    _delay_ms(500);
 	
     while (1) {
 		if (ActionFlags & 1<<KEYSCAN_FLAG) {
 			ActionFlags &= ~(1<<KEYSCAN_FLAG);
 			
             KeyFlags = ReadKeyState();
+            if (KeyFlags & 1<<KEY_LONGPRESS_F) {
+                soft_reset();
+            }
             
 			ModeProcessing(KeyFlags);
 		}
