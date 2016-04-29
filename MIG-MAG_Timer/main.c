@@ -120,8 +120,8 @@ volatile uint8_t Displayed[NUM_OF_DIGITS];
 uint8_t eeDelay1 EEMEM = 5;
 uint8_t eeDelay2 EEMEM = 10;
 
-int8_t Delay1;
-int8_t Delay2;
+uint8_t Delay1;
+uint8_t Delay2;
 
 // ============== Interrupts =============
 
@@ -319,7 +319,17 @@ void StateProcessing(uint8_t State) {
     } else {
         OUT_PORT &= ~(1<<WIRE);
     }        
-}    
+}
+
+void IncreaseDelay(uint8_t *Delay) {
+	// TODO: Increase
+	(*Delay)++;
+}
+
+void DecreaseDelay(uint8_t *Delay) {
+	// TODO: Decrease
+	(*Delay)--;
+}
 
 void ModeProcessing(uint8_t KeyFlags) {
 	
@@ -330,7 +340,7 @@ void ModeProcessing(uint8_t KeyFlags) {
 	// Define Action and NewMode
 	switch (CurrentMode) {
 		case MODE_WORK: {
-			// TODO: Show Delay1 & Delay2
+			// TODO: Show Delay1 & Delay2 in decimal
 			Displayed[3] = digits[Delay1>>4  & 0xF];
 			Displayed[2] = digits[Delay1 & 0xF];
 			Displayed[1] = digits[Delay2>>4  & 0xF];
@@ -348,14 +358,8 @@ void ModeProcessing(uint8_t KeyFlags) {
 			Displayed[2] = digits[Delay1 & 0xF];
 			Displayed[1] = Displayed[0] = SYM_EMPTY;
 					
-			if (KeyFlags & 1<<ENC_INC_F) {
-				// TODO: Increase Delay1
-				Delay1++;
-			}
-			if (KeyFlags & 1<<ENC_DEC_F) {
-				// TODO: Decrease Delay1
-				Delay1--;
-			}
+			if (KeyFlags & 1<<ENC_INC_F) IncreaseDelay(&Delay1);
+			if (KeyFlags & 1<<ENC_DEC_F) DecreaseDelay(&Delay1);
 			if (KeyFlags & 1<<KEY_CLICK_F) NewMode = MODE_SET2;
 			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_BYPASS_WIRE;
 			break;
@@ -366,12 +370,8 @@ void ModeProcessing(uint8_t KeyFlags) {
 			Displayed[1] = digits[Delay2>>4  & 0xF];
 			Displayed[0] = digits[Delay2 & 0xF];
 					
-			if (KeyFlags & 1<<ENC_INC_F) {
-				Delay2++;
-			}
-			if (KeyFlags & 1<<ENC_DEC_F) {
-				Delay2--;
-			}
+			if (KeyFlags & 1<<ENC_INC_F) IncreaseDelay(&Delay2);
+			if (KeyFlags & 1<<ENC_DEC_F) DecreaseDelay(&Delay2);
 			if (KeyFlags & 1<<KEY_CLICK_F) {
 				eeprom_write_byte(&eeDelay1, Delay1);
 				eeprom_write_byte(&eeDelay2, Delay2);
@@ -385,7 +385,7 @@ void ModeProcessing(uint8_t KeyFlags) {
 			break;
 		}
 		case MODE_BYPASS_WIRE: {
-			// TODO: Show "WIRE"
+			// Show "WIRE"
 			Displayed[3] = SYM_EMPTY;
 			Displayed[2] = SYM_P;
 			Displayed[1] = SYM_R;
@@ -398,7 +398,7 @@ void ModeProcessing(uint8_t KeyFlags) {
 			break;
 		}
 		case MODE_BYPASS_GAS: {
-			// TODO: Show "GAS"
+			// Show "GAS"
 			Displayed[3] = SYM_EMPTY;
 			Displayed[2] = SYM_G;
 			Displayed[1] = SYM_A;
@@ -427,15 +427,6 @@ int main(void) {
     uint8_t KeyFlags;
     uint8_t CurrentDigit = 0;
 	
-    
-    // DEBUG
-    //int8_t ClickCnt = 0;
-    //int8_t PressCnt = 0;
-    
-	// TODO: Read Delay1 & Delay2 from EEPROM
-	
-    //Displayed[3] = Displayed[2] = Displayed[1] = Displayed[0] = SYM_EMPTY;
-    
     while (1) {
 		if (ActionFlags & 1<<KEYSCAN_FLAG) {
 			ActionFlags &= ~(1<<KEYSCAN_FLAG);
