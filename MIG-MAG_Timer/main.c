@@ -70,6 +70,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
+#include <avr/eeprom.h>
 
 // ============ Global ===============
 
@@ -116,9 +117,11 @@ volatile uint8_t Cnt100ms = C100MS_INIT;
 volatile uint8_t ActionFlags = 0;
 volatile uint8_t Displayed[NUM_OF_DIGITS];
 
-// DEBUG
-int8_t Delay1 = 10;
-int8_t Delay2 = 20;
+uint8_t eeDelay1 EEMEM = 5;
+uint8_t eeDelay2 EEMEM = 10;
+
+int8_t Delay1;
+int8_t Delay2;
 
 // ============== Interrupts =============
 
@@ -147,6 +150,9 @@ void init(void) {
     OCR0A = 124;
     TIMSK = 1 << OCIE0A;
     
+	Delay1 = eeprom_read_byte(&eeDelay1);
+	Delay2 = eeprom_read_byte(&eeDelay2);
+	
     sei();
 }
 
@@ -361,18 +367,21 @@ void ModeProcessing(uint8_t KeyFlags) {
 			Displayed[0] = digits[Delay2 & 0xF];
 					
 			if (KeyFlags & 1<<ENC_INC_F) {
-				// TODO: Increase Delay2
 				Delay2++;
 			}
 			if (KeyFlags & 1<<ENC_DEC_F) {
-				// TODO: Decrease Delay2
 				Delay2--;
 			}
 			if (KeyFlags & 1<<KEY_CLICK_F) {
+				eeprom_write_byte(&eeDelay1, Delay1);
+				eeprom_write_byte(&eeDelay2, Delay2);
 				NewMode = MODE_WORK;
-				// TODO: Save Delay1 & Delay2 to EEPROM
 			}
-			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_BYPASS_WIRE;
+			if (KeyFlags & 1<<KEY_PRESS_F) {
+				Delay1 = eeprom_read_byte(&eeDelay1);
+				Delay2 = eeprom_read_byte(&eeDelay2);
+				NewMode = MODE_WORK;
+			}
 			break;
 		}
 		case MODE_BYPASS_WIRE: {
