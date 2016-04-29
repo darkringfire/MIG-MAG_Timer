@@ -141,6 +141,7 @@ const int8_t digits[] = {
 #define SYM_H	0b0110111
 #define SYM_E	0b1001111
 #define SYM_L	0b0001110
+#define SYM_F   0b1000111
 
 
 volatile uint8_t Cnt100ms = C100MS_INIT;
@@ -499,6 +500,7 @@ int main(void) {
 			
             KeyFlags = ReadKeyState();
             if (KeyFlags & 1<<KEY_LONGPRESS_F) {
+                SendSymbol(3, SYM_F);
                 soft_reset();
             }
             
