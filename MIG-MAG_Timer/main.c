@@ -12,95 +12,7 @@
 #include <avr/interrupt.h>
 #include <avr/eeprom.h>
 #include <avr/wdt.h>
-
-//------------- DEF -------------------------
-#define _NOP() do { __asm__ __volatile__ ("nop"); } while (0)
-#define HI(x) ((x)>>8)
-#define LO(x) ((x)& 0xFF)
-#define soft_reset()        \
-do                          \
-{                           \
-    wdt_enable(WDTO_15MS);  \
-    for(;;)                 \
-    {                       \
-    }                       \
-} while(0)
-
-#define  NUM_OF_DIGITS 4
-
-#define NEXT_DIGIT_FLAG 0
-#define KEYSCAN_FLAG    1
-#define C100MS_FLAG     2
-
-#define C100MS_INIT 100
-
-#ifdef _AVR_IOTN2313_H_
-    #define IND_PORT	PORTB
-    #define IND_DDR		DDRB
-    #define IND_SCK		7
-    #define IND_MOSI	6
-    #define IND_STORE	4
-
-    #define OUT_PORT    PORTA
-    #define OUT_DDR     DDRA
-    #define WIRE        0
-    #define GAS         1
-
-    #define KEYS_PORT   PORTD
-    #define KEYS_PIN    PIND
-    #define KEYS_DDR    DDRD
-    #define BUTTON      2
-    #define KEY         3
-    #define ENC_CCW     4
-    #define ENC_CW      5
-#endif // _AVR_IOTN2313_H_
-#ifdef _AVR_IOM328P_H_
-    #define IND_PORT    PORTB
-    #define IND_DDR     DDRB
-    #define IND_SCK     5
-    #define IND_MOSI    3
-    #define IND_STORE   2
-
-    #define OUT_PORT    PORTB
-    #define OUT_DDR     DDRB
-    #define WIRE        1
-    #define GAS         0
-
-    #define KEYS_PORT	PORTD
-    #define KEYS_PIN	PIND
-    #define KEYS_DDR	DDRD
-    #define ENC_CCW		4
-    #define ENC_CW		5
-    #define BUTTON		6
-    #define KEY			7
-#endif // _AVR_IOM328P_H_
-
-#define KEY_CLICK_F     0
-#define KEY_PRESS_F     1
-#define KEY_LONGPRESS_F 2
-#define ENC_INC_F       3
-#define ENC_DEC_F       4
-#define BUTTON_F        5
-#define ENC_MASK    (1<<ENC_CW | 1<<ENC_CCW)
-#define ENC_S0      (1<<ENC_CW | 1<<ENC_CCW)
-#define ENC_S1      (1<<ENC_CW | 0<<ENC_CCW)
-#define ENC_S2      (0<<ENC_CW | 0<<ENC_CCW)
-#define ENC_S3      (0<<ENC_CW | 1<<ENC_CCW)
-
-#define MODE_NOCHANGE		0
-#define MODE_WORK			1
-#define MODE_SET1			2
-#define MODE_SET2			3
-#define MODE_BYPASS_WIRE	4
-#define MODE_BYPASS_GAS		5
-
-#define STATE_IDLE			0
-
-#define STATE_WORK_PRE_GAS	1
-#define STATE_WORK_WELD		2
-#define STATE_WORK_POST_GAS	3
-#define STATE_BYPASS_WIRE   4
-#define STATE_BYPASS_GAS    5
+#include "defines.h"
 
 // ============ Global ===============
 
@@ -240,20 +152,22 @@ uint8_t ReadKeyState() {
     uint8_t KeyFlags = 0;
     
 	// get key status
+    #define PRESS_TIME 1000
+    #define LONGPRESS_TIME 2000
 	if (~KEYS_PIN & 1<<KEY) {
-    	if (KeyTime == 1000) {
+    	if (KeyTime == PRESS_TIME) {
         	// Press
         	KeyFlags |= 1<<KEY_PRESS_F;
     	}
-    	if (KeyTime == 5000) {
+    	if (KeyTime == LONGPRESS_TIME) {
         	// Press
         	KeyFlags |= 1<<KEY_LONGPRESS_F;
     	}
-    	if (KeyTime < 5000+1) {
+    	if (KeyTime < LONGPRESS_TIME+1) {
         	KeyTime++;
     	}
     } else {
-    	if (KeyTime > 10 && KeyTime < 1000) {
+    	if (KeyTime > 10 && KeyTime < PRESS_TIME) {
         	// Click
         	KeyFlags |= 1<<KEY_CLICK_F;
     	}
@@ -387,13 +301,15 @@ void StateProcessing(uint8_t State) {
 }
 
 void IncreaseDelay(uint8_t *Delay) {
-	// TODO: Increase
-	(*Delay)++;
+    if ((*Delay) >= 240) (*Delay) = 250;
+    else if ((*Delay) >= 10) (*Delay) += 10;
+    else (*Delay) += 5;
 }
 
 void DecreaseDelay(uint8_t *Delay) {
-	// TODO: Decrease
-	(*Delay)--;
+    if ((*Delay) <= 5) (*Delay) = 0;
+    else if ((*Delay) <= 10) (*Delay) -= 5;
+    else (*Delay) -= 10;
 }
 
 void ModeProcessing(uint8_t KeyFlags) {
