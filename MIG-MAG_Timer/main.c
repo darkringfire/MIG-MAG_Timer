@@ -13,6 +13,7 @@
 #include <avr/eeprom.h>
 #include <avr/wdt.h>
 #include "defines.h"
+#include "divmod10.h"
 
 // ============ Global ===============
 
@@ -54,6 +55,7 @@ const int8_t digits[] = {
 #define SYM_E	0b1001111
 #define SYM_L	0b0001110
 #define SYM_F   0b1000111
+#define SYM_DOT 0b10000000
 
 
 volatile uint8_t Cnt100ms = C100MS_INIT;
@@ -302,14 +304,26 @@ void StateProcessing(uint8_t State) {
 
 void IncreaseDelay(uint8_t *Delay) {
     if ((*Delay) >= 240) (*Delay) = 250;
-    else if ((*Delay) >= 10) (*Delay) += 10;
+    else if ((*Delay) >= 100) (*Delay) += 10;
     else (*Delay) += 5;
 }
 
 void DecreaseDelay(uint8_t *Delay) {
     if ((*Delay) <= 5) (*Delay) = 0;
-    else if ((*Delay) <= 10) (*Delay) -= 5;
+    else if ((*Delay) <= 100) (*Delay) -= 5;
     else (*Delay) -= 10;
+}
+
+void ShowDecimal(uint8_t value, uint8_t num) {
+    uint8_t buffer[3];
+    utod_fast_div8(value, buffer);
+    if (value < 100) {
+        Displayed[num*2] = digits[buffer[0]];
+        Displayed[num*2 + 1] = digits[buffer[1]] | SYM_DOT;
+    } else {
+        Displayed[num*2] = digits[buffer[1]] | SYM_DOT;
+        Displayed[num*2 + 1] = digits[buffer[2]];
+    }
 }
 
 void ModeProcessing(uint8_t KeyFlags) {
@@ -322,10 +336,8 @@ void ModeProcessing(uint8_t KeyFlags) {
 	switch (CurrentMode) {
 		case MODE_WORK: {
 			// TODO: Show Delay1 & Delay2 in decimal
-			Displayed[3] = digits[Delay1>>4  & 0xF];
-			Displayed[2] = digits[Delay1 & 0xF];
-			Displayed[1] = digits[Delay2>>4  & 0xF];
-			Displayed[0] = digits[Delay2 & 0xF];
+            ShowDecimal(Delay1, 1);
+            ShowDecimal(Delay2, 0);
 
 			if (KeyFlags & 1<<KEY_CLICK_F) NewMode = MODE_SET1;
 			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_BYPASS_WIRE;
@@ -335,8 +347,7 @@ void ModeProcessing(uint8_t KeyFlags) {
 		}
 		case MODE_SET1: {
 			// TODO: Blink Delay1
-			Displayed[3] = digits[Delay1>>4  & 0xF];
-			Displayed[2] = digits[Delay1 & 0xF];
+            ShowDecimal(Delay1, 1);
 			Displayed[1] = Displayed[0] = SYM_EMPTY;
 					
 			if (KeyFlags & 1<<ENC_INC_F) IncreaseDelay(&Delay1);
@@ -348,8 +359,7 @@ void ModeProcessing(uint8_t KeyFlags) {
 		case MODE_SET2: {
 			// TODO: Blink Delay2
 			Displayed[3] = Displayed[2] = SYM_EMPTY;
-			Displayed[1] = digits[Delay2>>4  & 0xF];
-			Displayed[0] = digits[Delay2 & 0xF];
+            ShowDecimal(Delay2, 0);
 					
 			if (KeyFlags & 1<<ENC_INC_F) IncreaseDelay(&Delay2);
 			if (KeyFlags & 1<<ENC_DEC_F) DecreaseDelay(&Delay2);
@@ -404,6 +414,7 @@ void ModeProcessing(uint8_t KeyFlags) {
 
 // ============== Main ===============
 int main(void) {
+    
     init();
     uint8_t KeyFlags;
     uint8_t CurrentDigit = 0;
