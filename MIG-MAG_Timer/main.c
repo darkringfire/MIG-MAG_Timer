@@ -230,12 +230,12 @@ uint8_t WorkStateSwitch(uint8_t State, uint8_t KeyFlags) {
         case STATE_WORK_PRE_GAS: {
             if (KeyFlags & 1<<BUTTON_F) {
                 // Delay
+                if (DelayCnt == 0) {
+	                State = STATE_WORK_WELD;
+                }
                 if (ActionFlags & 1<<C100MS_FLAG) {
                     ActionFlags &= ~(1<<C100MS_FLAG);
                     DelayCnt--;
-                }
-                if (DelayCnt == 0) {
-                    State = STATE_WORK_WELD;
                 }
             } else {
                 State = STATE_IDLE;
