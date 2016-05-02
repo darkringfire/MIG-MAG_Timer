@@ -5,14 +5,11 @@
 #define _NOP() do { __asm__ __volatile__ ("nop"); } while (0)
 #define HI(x) ((x)>>8)
 #define LO(x) ((x)& 0xFF)
-#define soft_reset()        \
-do                          \
-{                           \
-    wdt_enable(WDTO_15MS);  \
-    for(;;)                 \
-    {                       \
-    }                       \
-} while(0)
+#define soft_reset()            \
+    while(1) {                  \
+        wdt_enable(WDTO_15MS);  \
+        while(1) {}             \
+    }    
 
 #define  NUM_OF_DIGITS 4
 

@@ -55,6 +55,7 @@ const int8_t digits[] = {
 #define SYM_E	0b1001111
 #define SYM_L	0b0001110
 #define SYM_F   0b1000111
+#define SYM_BEGIN 0b1001001
 #define SYM_DOT 0b10000000
 
 
@@ -67,6 +68,16 @@ uint8_t eeDelay2 EEMEM = 10;
 
 uint8_t Delay1;
 uint8_t Delay2;
+
+// ========= RESET AFTER WDT  (IT'S MAGIC!!!) ======================
+uint8_t mcusr_mirror __attribute__ ((section (".noinit")));
+
+void get_mcusr(void) __attribute__((naked)) __attribute__((section(".init3")));
+void get_mcusr(void) {
+    mcusr_mirror = MCUSR;
+    MCUSR = 0;
+    wdt_disable();
+}
 
 // ============== Interrupts =============
 
@@ -414,12 +425,13 @@ void ModeProcessing(uint8_t KeyFlags) {
 
 // ============== Main ===============
 int main(void) {
-    
     init();
+    
     uint8_t KeyFlags;
     uint8_t CurrentDigit = 0;
     
-    _delay_ms(500);
+    SendSymbol(3, SYM_BEGIN);
+    _delay_ms(1000);
 	
     while (1) {
 		if (ActionFlags & 1<<KEYSCAN_FLAG) {
