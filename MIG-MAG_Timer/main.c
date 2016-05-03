@@ -166,7 +166,7 @@ uint8_t ReadKeyState() {
     
 	// get key status
     #define PRESS_TIME 1000
-    #define LONGPRESS_TIME 2000
+    #define LONGPRESS_TIME 5000
 	if (~KEYS_PIN & 1<<KEY) {
     	if (KeyTime == PRESS_TIME) {
         	// Press
@@ -329,11 +329,11 @@ void ShowDecimal(uint8_t value, uint8_t num) {
     uint8_t buffer[3];
     utod_fast_div8(value, buffer);
     if (value < 100) {
-        Displayed[num*2] = digits[buffer[0]];
-        Displayed[num*2 + 1] = digits[buffer[1]] | SYM_DOT;
-    } else {
+        Displayed[num*2 + 1] = digits[buffer[0]];
         Displayed[num*2] = digits[buffer[1]] | SYM_DOT;
-        Displayed[num*2 + 1] = digits[buffer[2]];
+    } else {
+        Displayed[num*2 + 1] = digits[buffer[1]] | SYM_DOT;
+        Displayed[num*2] = digits[buffer[2]];
     }
 }
 
@@ -347,8 +347,8 @@ void ModeProcessing(uint8_t KeyFlags) {
 	switch (CurrentMode) {
 		case MODE_WORK: {
 			// TODO: Show Delay1 & Delay2 in decimal
-            ShowDecimal(Delay1, 1);
-            ShowDecimal(Delay2, 0);
+            ShowDecimal(Delay1, 0);
+            ShowDecimal(Delay2, 1);
 
 			if (KeyFlags & 1<<KEY_CLICK_F) NewMode = MODE_SET1;
 			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_BYPASS_WIRE;
@@ -358,8 +358,8 @@ void ModeProcessing(uint8_t KeyFlags) {
 		}
 		case MODE_SET1: {
 			// TODO: Blink Delay1
-            ShowDecimal(Delay1, 1);
-			Displayed[1] = Displayed[0] = SYM_EMPTY;
+            ShowDecimal(Delay1, 0);
+			Displayed[2] = Displayed[3] = SYM_EMPTY;
 					
 			if (KeyFlags & 1<<ENC_INC_F) IncreaseDelay(&Delay1);
 			if (KeyFlags & 1<<ENC_DEC_F) DecreaseDelay(&Delay1);
@@ -369,8 +369,8 @@ void ModeProcessing(uint8_t KeyFlags) {
 		}
 		case MODE_SET2: {
 			// TODO: Blink Delay2
-			Displayed[3] = Displayed[2] = SYM_EMPTY;
-            ShowDecimal(Delay2, 0);
+			Displayed[0] = Displayed[1] = SYM_EMPTY;
+            ShowDecimal(Delay2, 1);
 					
 			if (KeyFlags & 1<<ENC_INC_F) IncreaseDelay(&Delay2);
 			if (KeyFlags & 1<<ENC_DEC_F) DecreaseDelay(&Delay2);
@@ -388,10 +388,10 @@ void ModeProcessing(uint8_t KeyFlags) {
 		}
 		case MODE_BYPASS_WIRE: {
 			// Show "WIRE"
-			Displayed[3] = SYM_EMPTY;
-			Displayed[2] = SYM_P;
-			Displayed[1] = SYM_R;
-			Displayed[0] = SYM_O;
+			Displayed[0] = SYM_EMPTY;
+			Displayed[1] = SYM_P;
+			Displayed[2] = SYM_R;
+			Displayed[3] = SYM_O;
 					
 			if (KeyFlags & 1<<KEY_CLICK_F) NewMode = MODE_BYPASS_GAS;
 			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_WORK;
@@ -401,10 +401,10 @@ void ModeProcessing(uint8_t KeyFlags) {
 		}
 		case MODE_BYPASS_GAS: {
 			// Show "GAS"
-			Displayed[3] = SYM_EMPTY;
-			Displayed[2] = SYM_G;
-			Displayed[1] = SYM_A;
-			Displayed[0] = SYM_S;
+			Displayed[0] = SYM_EMPTY;
+			Displayed[1] = SYM_G;
+			Displayed[2] = SYM_A;
+			Displayed[3] = SYM_S;
 					
 			if (KeyFlags & 1<<KEY_CLICK_F) NewMode = MODE_BYPASS_WIRE;
 			if (KeyFlags & 1<<KEY_PRESS_F) NewMode = MODE_WORK;
@@ -430,7 +430,7 @@ int main(void) {
     uint8_t KeyFlags;
     uint8_t CurrentDigit = 0;
     
-    SendSymbol(3, SYM_BEGIN);
+    SendSymbol(0, SYM_BEGIN);
     _delay_ms(1000);
 	
     while (1) {
@@ -439,7 +439,7 @@ int main(void) {
 			
             KeyFlags = ReadKeyState();
             if (KeyFlags & 1<<KEY_LONGPRESS_F) {
-                SendSymbol(3, SYM_F);
+                SendSymbol(0, SYM_F);
                 soft_reset();
             }
             
