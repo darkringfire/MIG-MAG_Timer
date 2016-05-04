@@ -5,7 +5,7 @@
  * Author : dark
  */ 
 
-#define F_CPU 16000000UL
+#define F_CPU 2000000UL
 //------------- INC -------------------------
 #include <avr/io.h>
 #include <util/delay.h>
@@ -110,8 +110,12 @@ void init(void) {
     TCCR0A = 0b10 << WGM00;
     TCCR0B = 0 << WGM02;
     #if F_CPU == 1000000UL
-        TCCR0B |= 0b010 << CS00; // 001 - 1; 010 - 8; 011 - 64; 100 - 256; 101 - 1024
-        OCR0A = 124;
+    TCCR0B |= 0b010 << CS00; // 001 - 1; 010 - 8; 011 - 64; 100 - 256; 101 - 1024
+    OCR0A = 124;
+    #endif
+    #if F_CPU == 2000000UL
+    TCCR0B |= 0b010 << CS00; // 001 - 1; 010 - 8; 011 - 64; 100 - 256; 101 - 1024
+    OCR0A = 249;
     #endif
     #if F_CPU == 8000000UL
         TCCR0B |= 0b011 << CS00; // 001 - 1; 010 - 8; 011 - 64; 100 - 256; 101 - 1024
