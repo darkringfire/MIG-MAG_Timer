@@ -155,8 +155,8 @@ void SPIOut(uint8_t cData) {
 }
 
 void SendSymbol(uint8_t n, uint8_t a) {
-    SPIOut(1<<n);
-    SPIOut(~a);
+    SPIOut(~(1<<n));
+    SPIOut(a);
 
     IND_PORT |= 1<<IND_STORE;
     IND_PORT &= ~(1<<IND_STORE);
@@ -438,6 +438,16 @@ int main(void) {
     _delay_ms(1000);
 	
     while (1) {
+        if (ActionFlags & 1<<NEXT_DIGIT_FLAG) {
+            ActionFlags &= ~(1<<NEXT_DIGIT_FLAG);
+            SendSymbol(CurrentDigit, Displayed[CurrentDigit]);
+            if(CurrentDigit) {
+                CurrentDigit--;
+            } else {
+                CurrentDigit = NUM_OF_DIGITS;
+            }
+        }
+
 		if (ActionFlags & 1<<KEYSCAN_FLAG) {
 			ActionFlags &= ~(1<<KEYSCAN_FLAG);
 			
@@ -449,19 +459,6 @@ int main(void) {
             
 			ModeProcessing(KeyFlags);
 		}
-			
-        
-		
-        if (ActionFlags & 1<<NEXT_DIGIT_FLAG) {
-            ActionFlags &= ~(1<<NEXT_DIGIT_FLAG);
-            SendSymbol(CurrentDigit, Displayed[CurrentDigit]);
-            if(CurrentDigit) {
-                CurrentDigit--;
-            } else {
-                CurrentDigit = NUM_OF_DIGITS;
-            }
-        }
-        
     }
 }
 

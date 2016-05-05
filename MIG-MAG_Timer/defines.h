@@ -20,44 +20,44 @@
 #define C100MS_INIT 100
 
 #ifdef _AVR_IOTN2313_H_
-#define IND_PORT	PORTB
-#define IND_DDR		DDRB
-#define IND_SCK		7
-#define IND_MOSI	6
-#define IND_STORE	4
+    #define IND_PORT	PORTB
+    #define IND_DDR		DDRB
+    #define IND_SCK		7
+    #define IND_MOSI	6
+    #define IND_STORE	4
 
-#define OUT_PORT    PORTA
-#define OUT_DDR     DDRA
-#define WIRE        0
-#define GAS         1
+    #define OUT_PORT    PORTA
+    #define OUT_DDR     DDRA
+    #define WIRE        0
+    #define GAS         1
 
-#define KEYS_PORT   PORTD
-#define KEYS_PIN    PIND
-#define KEYS_DDR    DDRD
-#define BUTTON      2
-#define KEY         3
-#define ENC_CCW     4
-#define ENC_CW      5
+    #define KEYS_PORT   PORTD
+    #define KEYS_PIN    PIND
+    #define KEYS_DDR    DDRD
+    #define BUTTON      2
+    #define KEY         3
+    #define ENC_CCW     4
+    #define ENC_CW      5
 #endif // _AVR_IOTN2313_H_
 #ifdef _AVR_IOM328P_H_
-#define IND_PORT    PORTB
-#define IND_DDR     DDRB
-#define IND_SCK     5
-#define IND_MOSI    3
-#define IND_STORE   2
+    #define IND_PORT    PORTB
+    #define IND_DDR     DDRB
+    #define IND_SCK     5
+    #define IND_MOSI    3
+    #define IND_STORE   2
 
-#define OUT_PORT    PORTB
-#define OUT_DDR     DDRB
-#define WIRE        1
-#define GAS         0
-
-#define KEYS_PORT	PORTD
-#define KEYS_PIN	PIND
-#define KEYS_DDR	DDRD
-#define ENC_CCW		4
-#define ENC_CW		5
-#define BUTTON		6
-#define KEY			7
+    #define OUT_PORT    PORTB
+    #define OUT_DDR     DDRB
+    #define WIRE        1
+    #define GAS         0
+    
+    #define KEYS_PORT	PORTD
+    #define KEYS_PIN	PIND
+    #define KEYS_DDR	DDRD
+    #define ENC_CCW		4
+    #define ENC_CW		5
+    #define KEY			6
+    #define BUTTON		7
 #endif // _AVR_IOM328P_H_
 
 #define KEY_CLICK_F     0
