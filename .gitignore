@@ -2,4 +2,5 @@
 Debug/
 Release/
 *.componentinfo.xml
-avrdude.conf
+astudio_dude.conf
+avrdude.ini
