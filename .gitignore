@@ -2,3 +2,4 @@
 Debug/
 Release/
 *.componentinfo.xml
+avrdude.conf
