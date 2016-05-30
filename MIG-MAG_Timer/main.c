@@ -444,7 +444,7 @@ int main(void) {
             if(CurrentDigit) {
                 CurrentDigit--;
             } else {
-                CurrentDigit = NUM_OF_DIGITS;
+                CurrentDigit = NUM_OF_DIGITS - 1;
             }
         }
 
